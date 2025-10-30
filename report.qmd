@@ -8,17 +8,23 @@ format: typst
 ## **Part 0: libraries**
 
 ```{r}
-
+library(stringr)
+library(dplyr)
+library(ggplot2)
+library(tidyr)
 ```
 
 ## **Part 1:** **Defining Research Question**
 
-Chosen Question:
+Chosen Questions: How does the rate of EV registrations compare to the renewable energy use by each state in 2023? How does the average energy price per state compare to the total energy use of the state? Does energy use coincide with the price? 
 
 ## **Part 2: Data Preparation and Cleaning**
 
 ```{r}
-
+price_data_21to23 <- read.csv("av_energy_price_2021-2023.csv")
+total_energy_2021 <- read.csv("total_energy_use_2021.csv")
+total_energy_2022 <- read.csv("total_energy_use_2022.csv")
+total_energy_2021 <-read.csv("total_energy_use_2023.csv")
 ```
 
 ## **Part 3: Joining / Pivoting Datasets for Analysis**
