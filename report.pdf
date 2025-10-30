@@ -1,0 +1,179 @@
+---
+title: "EV Power - Lab 4 Project Report"
+format: pdf
+---
+
+# Example Solution 1
+
+## **Part 0: libraries**
+
+```{r}
+library(stringr)
+library(dplyr)
+library(ggplot2)
+library(tidyr)
+library(maps)
+library(sf)
+library(readr)
+library(tidyverse)
+```
+
+## **Part 1:** **Defining Research Question** I want to find which state has the cheapest energy on average (i.e. how much energy per dollar per state from 2021 to 2023, energy is measured in BTU)
+
+Research Question: 
+## **Part 2: Data Preparation and Cleaning**
+
+```{r}
+price_data_21to23 <- read.csv("av-energy-price-2021-2023.csv")
+total_energy_2021 <- read.csv("total-use-2021.csv")
+total_energy_2022 <- read.csv("total-use-2022.csv")
+total_energy_2023 <-read.csv("total-use-2023.csv")
+price_vec <- unlist(price_data_21to23)
+
+price_vec <- str_remove(price_vec, "Total\\.energy\\.average\\.price\\.\\.dollars\\.per\\.million\\.Btu\\.\\.\\.\\d+")
+
+price_vec = str_split(price_vec, ",")
+
+price_vec<- price_vec[-1]
+
+
+price_tbl <- price_vec %>%
+  map(~as_tibble_row(set_names(.x, c("State", "2021", "2022", "2023")))) %>%
+  bind_rows()
+
+price_tbl<- price_tbl|> slice(-1)
+
+
+price_tbl_clean <- price_tbl |> 
+  mutate(
+    `2021` = as.numeric(str_extract(`2021`, "\\d+\\.?\\d*")),
+    `2022` = as.numeric(str_extract(`2022`, "\\d+\\.?\\d*")),
+    `2023` = as.numeric(str_extract(`2023`, "\\d+\\.?\\d*"))
+  )
+
+price_2021 <- select(price_tbl_clean, State, `2021`)
+price_2022 <- select(price_tbl_clean, State, `2022`)
+price_2023 <- select(price_tbl_clean, State, `2023`)
+
+energy_2023 = as_tibble(total_energy_2023)
+energy_2022 = as_tibble(total_energy_2022)
+energy_2021 = as_tibble(total_energy_2021)
+
+```
+
+## **Part 3: Joining / Pivoting Datasets for Analysis**
+
+```{r}
+energy_2021_long <- energy_2021 |> pivot_longer(
+     cols = -Energy_Source,     
+    names_to = "State",        
+    values_to = "Energy_Use")
+
+energy_2022_long <- energy_2022 |>
+ pivot_longer(
+    cols = -Energy_Source,     
+    names_to = "State",        
+    values_to = "Energy_Use") 
+
+energy_2023_long <- energy_2023 |>
+  pivot_longer(
+    cols = -Energy_Source,     
+    names_to = "State",        
+    values_to = "Energy_Use"     
+  )
+
+
+avg_energy_2021 <- energy_2021_long |>
+   group_by(State) |>
+   summarize(avg_energy_use = mean(Energy_Use))
+
+avg_energy_2022 <- energy_2022_long |>
+   group_by(State) |>
+   summarize(avg_energy_use = mean(Energy_Use))
+
+avg_energy_2023 <- energy_2023_long |>
+   group_by(State) |>
+   summarize(avg_energy_use = mean(Energy_Use))
+
+use_v_price_2021 = left_join(avg_energy_2021, price_2021)
+use_v_price_2022 = left_join(avg_energy_2022, price_2022)
+use_v_price_2023 = left_join(avg_energy_2023, price_2023)
+
+head(use_v_price_2021)
+head(use_v_price_2022)
+head(use_v_price_2023)
+```
+
+## **Part 4: Mapping Visualization**
+
+```{r}
+states_map <- map_data("state")
+
+
+use_v_price_2021 <- use_v_price_2021 |>
+  mutate(State_full = tolower(state.name[match(State, state.abb)]))
+
+use_v_price_2022 <- use_v_price_2022 |>
+  mutate(State_full = tolower(state.name[match(State, state.abb)]))
+
+use_v_price_2023 <- use_v_price_2023 |>
+  mutate(State_full = tolower(state.name[match(State, state.abb)]))
+
+
+# calculate the average consumption in thousand Btu, per dollar 
+btu_per_dollar_2021 <- use_v_price_2021 |> 
+    mutate(btu_per_dollar = avg_energy_use/`2021`)
+btu_per_dollar_2022 <- use_v_price_2022 |> 
+    mutate(btu_per_dollar = avg_energy_use/`2022`)
+btu_per_dollar_2023 <- use_v_price_2023 |> 
+    mutate(btu_per_dollar = avg_energy_use/`2023`)
+
+
+map_2021 <- left_join(states_map, btu_per_dollar_2021, by = c("region" = "State_full"))
+map_2022 <- left_join(states_map, btu_per_dollar_2022, by = c("region" = "State_full"))
+map_2023 <- left_join(states_map, btu_per_dollar_2023, by = c("region" = "State_full"))
+btuperdollar_map_2021 <- ggplot(map_2021, aes(x = long, y = lat, group = group, fill = btu_per_dollar)) +
+  geom_polygon(color = "white", size = 0.2) +   
+  coord_fixed(1.3) +                             
+  scale_fill_gradient(low = "lightblue", high = "darkred", na.value = "grey90") +
+  labs(
+    title = "BTU per Dollar by State (2021)",
+    fill = "BTU per $"
+  ) + theme_void() + theme(
+  legend.position = "bottom",
+  legend.key.width = unit(2.5, "cm"),
+  plot.title = element_text(hjust = 0.5, margin = margin(b = 15))
+)
+
+btuperdollar_map_2022 <- ggplot(map_2022, aes(x = long, y = lat, group = group, fill = btu_per_dollar)) +
+  geom_polygon(color = "white", size = 0.2) +   
+  coord_fixed(1.3) +                           
+  scale_fill_gradient(low = "lightblue", high = "darkred", na.value = "grey90") +
+  labs(
+    title = "BTU per Dollar by State (2022)",
+    fill = "BTU per $"
+  ) + theme_void() + theme(
+  legend.position = "bottom",
+  legend.key.width = unit(2.5, "cm"),
+  plot.title = element_text(hjust = 0.5, margin = margin(b = 15))
+)
+
+btuperdollar_map_2023 <- ggplot(map_2023, aes(x = long, y = lat, group = group, fill = btu_per_dollar)) +
+  geom_polygon(color = "white", size = 0.2) +   
+  coord_fixed(1.3) +                           
+  scale_fill_gradient(low = "lightblue", high = "darkred", na.value = "grey90") +
+  labs(
+    title = "BTU per Dollar by State (2023)",
+    fill = "BTU per $"
+  ) + theme_void() + theme(
+  legend.position = "bottom",
+  legend.key.width = unit(2.5, "cm"),
+  plot.title = element_text(hjust = 0.5, margin = margin(b = 15))
+)
+
+btuperdollar_map_2021
+btuperdollar_map_2022
+btuperdollar_map_2023
+
+#Texas by far has the greatest amount of energy use per dollar, meaning that it is the cheapest per dollar. I also notice that the states with greater populations have a greater count of BTU per dollar. 
+```
